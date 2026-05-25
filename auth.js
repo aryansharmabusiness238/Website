@@ -89,17 +89,12 @@
     const ctaBtn = $('btnGetStarted');
     const userMenu = $('navUserMenu');
     const userEmail = $('navUserEmail');
+    const loggedIn = !!(session?.user);
 
-    if (session?.user) {
-      loginBtn.hidden = true;
-      ctaBtn.hidden = true;
-      userMenu.hidden = false;
-      userEmail.textContent = session.user.email || 'Account';
-    } else {
-      loginBtn.hidden = false;
-      ctaBtn.hidden = false;
-      userMenu.hidden = true;
-    }
+    if (loginBtn) loginBtn.hidden = loggedIn;
+    if (ctaBtn) ctaBtn.hidden = loggedIn;
+    if (userMenu) userMenu.hidden = !loggedIn;
+    if (userEmail) userEmail.textContent = loggedIn ? (session.user.email || 'Account') : '';
   }
 
   window.openModal = function () {
@@ -231,6 +226,7 @@
   }
 
   async function init() {
+    updateNav(null);
     updateModalUI();
     bindEvents();
 
@@ -240,8 +236,9 @@
     const { data: { session } } = await sb.auth.getSession();
     updateNav(session);
 
-    sb.auth.onAuthStateChange((_event, session) => {
+    sb.auth.onAuthStateChange((event, session) => {
       updateNav(session);
+      if (event === 'SIGNED_OUT') updateNav(null);
     });
   }
 
