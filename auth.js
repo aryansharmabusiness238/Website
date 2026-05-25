@@ -140,11 +140,17 @@
     if (userEmail) userEmail.textContent = loggedIn ? (session.user.email || 'Account') : '';
   }
 
-  function updateDashboardView(session) {
+  async function updateDashboardView(session) {
     if (!isAppPage) return;
-    const adminPanel = $('adminPanel');
-    if (!adminPanel) return;
-    adminPanel.hidden = !isAdmin(session?.user?.email);
+    const email = session?.user?.email;
+    const admin = isAdmin(email);
+
+    if (typeof window.initRequests === 'function' && session?.user) {
+      await window.initRequests(session, admin);
+    } else {
+      const adminPanel = $('adminPanel');
+      if (adminPanel) adminPanel.hidden = !admin;
+    }
   }
 
   function handleAuthRouting(session) {
@@ -298,20 +304,20 @@
     const { data: { session } } = await sb.auth.getSession();
     handleAuthRouting(session);
     updateNav(session);
-    updateDashboardView(session);
+    await updateDashboardView(session);
 
-    sb.auth.onAuthStateChange((event, session) => {
+    sb.auth.onAuthStateChange(async (event, session) => {
       if (event === 'SIGNED_IN' && session) {
         if (isHomePage) goDashboard();
         else {
           updateNav(session);
-          updateDashboardView(session);
+          await updateDashboardView(session);
         }
       } else if (event === 'SIGNED_OUT') {
         goHome();
       } else {
         updateNav(session);
-        updateDashboardView(session);
+        await updateDashboardView(session);
       }
     });
   }
