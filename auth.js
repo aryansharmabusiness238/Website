@@ -19,6 +19,13 @@
     return url.replace(/\/rest\/v1\/?$/, '').replace(/\/$/, '');
   }
 
+  function getRedirectUrl() {
+    if (window.SITE_URL && !window.SITE_URL.includes('your-username')) {
+      return window.SITE_URL;
+    }
+    return window.location.origin + window.location.pathname;
+  }
+
   function getClient() {
     if (!isConfigured()) return null;
     if (!client) {
@@ -126,7 +133,7 @@
     setMessage('');
     const { error } = await sb.auth.signInWithOAuth({
       provider: 'google',
-      options: { redirectTo: window.location.href.split('#')[0] },
+      options: { redirectTo: getRedirectUrl() },
     });
     setLoading(false);
     if (error) setMessage(error.message, 'error');
@@ -153,7 +160,7 @@
     try {
       if (mode === 'forgot') {
         const { error } = await sb.auth.resetPasswordForEmail(email, {
-          redirectTo: window.location.href.split('#')[0],
+          redirectTo: getRedirectUrl(),
         });
         if (error) throw error;
         setMessage('Check your email for the password reset link.', 'success');
