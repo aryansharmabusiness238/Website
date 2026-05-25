@@ -5,3 +5,4 @@ window.SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXB
 // Must match Supabase → Authentication → URL Configuration → Redirect URLs
 window.HOME_URL = 'https://project-m4k4t.vercel.app/';
 window.DASHBOARD_URL = 'https://project-m4k4t.vercel.app/dashboard.html';
+window.ADMIN_EMAILS = ['aryan.238.sharma@gmail.com', 'samarthssinghal@gmail.com'];

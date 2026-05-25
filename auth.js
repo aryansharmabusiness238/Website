@@ -10,6 +10,21 @@
 
   const $ = (id) => document.getElementById(id);
 
+  const DEFAULT_ADMIN_EMAILS = [
+    'aryan.238.sharma@gmail.com',
+    'samarthssinghal@gmail.com',
+  ];
+
+  function getAdminEmails() {
+    const list = window.ADMIN_EMAILS || DEFAULT_ADMIN_EMAILS;
+    return list.map((e) => e.trim().toLowerCase());
+  }
+
+  function isAdmin(email) {
+    if (!email) return false;
+    return getAdminEmails().includes(email.trim().toLowerCase());
+  }
+
   function isConfigured() {
     return (
       window.SUPABASE_URL &&
@@ -123,6 +138,13 @@
     }
     if (userMenu) userMenu.hidden = !loggedIn;
     if (userEmail) userEmail.textContent = loggedIn ? (session.user.email || 'Account') : '';
+  }
+
+  function updateDashboardView(session) {
+    if (!isAppPage) return;
+    const adminPanel = $('adminPanel');
+    if (!adminPanel) return;
+    adminPanel.hidden = !isAdmin(session?.user?.email);
   }
 
   function handleAuthRouting(session) {
@@ -266,6 +288,7 @@
 
   async function init() {
     updateNav(null);
+    updateDashboardView(null);
     updateModalUI();
     bindEvents();
 
@@ -275,15 +298,20 @@
     const { data: { session } } = await sb.auth.getSession();
     handleAuthRouting(session);
     updateNav(session);
+    updateDashboardView(session);
 
     sb.auth.onAuthStateChange((event, session) => {
       if (event === 'SIGNED_IN' && session) {
         if (isHomePage) goDashboard();
-        else updateNav(session);
+        else {
+          updateNav(session);
+          updateDashboardView(session);
+        }
       } else if (event === 'SIGNED_OUT') {
         goHome();
       } else {
         updateNav(session);
+        updateDashboardView(session);
       }
     });
   }
