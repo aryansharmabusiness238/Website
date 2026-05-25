@@ -15,9 +15,18 @@
     );
   }
 
+  function normalizeUrl(url) {
+    return url.replace(/\/rest\/v1\/?$/, '').replace(/\/$/, '');
+  }
+
   function getClient() {
     if (!isConfigured()) return null;
-    if (!client) client = createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY);
+    if (!client) {
+      client = createClient(
+        normalizeUrl(window.SUPABASE_URL),
+        window.SUPABASE_ANON_KEY
+      );
+    }
     return client;
   }
 

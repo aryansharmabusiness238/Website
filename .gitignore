@@ -1,1 +1,1 @@
-supabase-config.js
+# Never commit the service_role key. The anon key in supabase-config.js is safe for frontend use.
