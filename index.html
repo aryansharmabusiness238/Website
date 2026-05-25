@@ -670,7 +670,45 @@
     color: #aaa;
   }
 
-  .modal-footer a { color: var(--blue-mid); text-decoration: none; }
+  .modal-footer a { color: var(--blue-mid); text-decoration: none; cursor: pointer; }
+
+  .auth-message {
+    font-size: 0.85rem;
+    padding: 0.65rem 0.85rem;
+    border-radius: 10px;
+    margin-bottom: 1rem;
+    line-height: 1.45;
+  }
+  .auth-message--error { background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; }
+  .auth-message--success { background: #f0fdf4; color: #166534; border: 1px solid #bbf7d0; }
+
+  .btn-google:disabled, .btn-email-signin:disabled { opacity: 0.6; cursor: not-allowed; }
+
+  .nav-user-menu {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+  }
+  .nav-user-email {
+    font-size: 0.85rem;
+    color: var(--slate);
+    max-width: 160px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .btn-logout {
+    background: transparent;
+    border: 1.5px solid var(--slate);
+    color: var(--slate);
+    padding: 0.45rem 1rem;
+    border-radius: 50px;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 0.8rem;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .btn-logout:hover { border-color: var(--blue-mid); color: var(--blue-mid); }
 
   /* FLOATING SHAPES */
   .shape {
@@ -703,8 +741,12 @@
   </ul>
 
   <div class="nav-right">
-    <button class="btn-login" onclick="openModal()">Log in</button>
-    <button class="btn-cta-nav" onclick="openModal()">Get Started</button>
+    <button class="btn-login" id="btnLogin" onclick="openModal()">Log in</button>
+    <button class="btn-cta-nav" id="btnGetStarted" onclick="openModal()">Get Started</button>
+    <div class="nav-user-menu" id="navUserMenu" hidden>
+      <span class="nav-user-email" id="navUserEmail"></span>
+      <button class="btn-logout" id="btnLogout" type="button">Log out</button>
+    </div>
   </div>
 </nav>
 
@@ -885,10 +927,12 @@
       <span>Solven</span>
     </div>
 
-    <h3>Welcome back</h3>
-    <p class="modal-sub">Sign in to your Solven account</p>
+    <h3 id="authTitle">Welcome back</h3>
+    <p class="modal-sub" id="authSubtitle">Sign in to your Solven account</p>
 
-    <button class="btn-google">
+    <p class="auth-message" id="authMessage" hidden></p>
+
+    <button type="button" class="btn-google" id="btnGoogle">
       <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
         <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
         <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
@@ -900,39 +944,19 @@
 
     <div class="divider">or sign in with email</div>
 
-    <input type="email" placeholder="Email address" />
-    <input type="password" placeholder="Password" />
-    <button class="btn-email-signin">Sign In</button>
+    <input type="email" id="authEmail" placeholder="Email address" autocomplete="email" />
+    <input type="password" id="authPassword" placeholder="Password" autocomplete="current-password" />
+    <button type="button" class="btn-email-signin" id="btnEmailAuth">Sign In</button>
 
     <p class="modal-footer">
-      Don't have an account? <a href="#">Sign up free</a>
-      &nbsp;·&nbsp; <a href="#">Forgot password?</a>
+      <a href="#" id="toggleSignUp">Don't have an account? Sign up free</a>
+      &nbsp;·&nbsp; <a href="#" id="forgotPassword">Forgot password?</a>
     </p>
   </div>
 </div>
 
-<script>
-  function openModal() {
-    document.getElementById('loginModal').classList.add('open');
-    document.body.style.overflow = 'hidden';
-  }
-
-  function closeModal() {
-    document.getElementById('loginModal').classList.remove('open');
-    document.body.style.overflow = '';
-  }
-
-  function handleOverlayClick(e) {
-    if (e.target === document.getElementById('loginModal')) closeModal();
-  }
-
-  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
-
-  // Scroll-based nav style
-  window.addEventListener('scroll', () => {
-    const nav = document.querySelector('nav');
-    nav.style.boxShadow = window.scrollY > 20 ? '0 4px 24px rgba(26,95,168,0.1)' : 'none';
-  });
-</script>
+<script src="supabase-config.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="auth.js"></script>
 </body>
 </html>
