@@ -2,7 +2,11 @@
   const { createClient } = supabase;
 
   let client = null;
-  let mode = 'signin'; // 'signin' | 'signup' | 'forgot'
+  let mode = 'signin';
+
+  const PAGE = document.body.dataset.page || 'home';
+  const isAppPage = PAGE === 'app';
+  const isHomePage = PAGE === 'home';
 
   const $ = (id) => document.getElementById(id);
 
@@ -19,11 +23,32 @@
     return url.replace(/\/rest\/v1\/?$/, '').replace(/\/$/, '');
   }
 
-  function getRedirectUrl() {
-    if (window.SITE_URL && !window.SITE_URL.includes('your-username')) {
-      return window.SITE_URL;
+  function getHomeUrl() {
+    if (window.HOME_URL && !window.HOME_URL.includes('your-app')) {
+      return window.HOME_URL;
     }
-    return window.location.origin + window.location.pathname;
+    const base = window.location.origin + '/';
+    return base.endsWith('//') ? base : base.replace(/\/[^/]*$/, '/');
+  }
+
+  function getDashboardUrl() {
+    if (window.DASHBOARD_URL && !window.DASHBOARD_URL.includes('your-app')) {
+      return window.DASHBOARD_URL;
+    }
+    const dir = window.location.pathname.replace(/[^/]+$/, '');
+    return window.location.origin + dir + 'dashboard.html';
+  }
+
+  function goHome() {
+    window.location.href = getHomeUrl();
+  }
+
+  function goDashboard() {
+    window.location.href = getDashboardUrl();
+  }
+
+  function getOAuthRedirectUrl() {
+    return getDashboardUrl();
   }
 
   function getClient() {
@@ -59,6 +84,7 @@
     const toggle = $('toggleSignUp');
     const forgot = $('forgotPassword');
     const password = $('authPassword');
+    if (!title) return;
 
     if (mode === 'signup') {
       title.textContent = 'Create your account';
@@ -91,13 +117,24 @@
     const userEmail = $('navUserEmail');
     const loggedIn = !!(session?.user);
 
-    if (loginBtn) loginBtn.hidden = loggedIn;
-    if (ctaBtn) ctaBtn.hidden = loggedIn;
+    if (isHomePage) {
+      if (loginBtn) loginBtn.hidden = loggedIn;
+      if (ctaBtn) ctaBtn.hidden = loggedIn;
+    }
     if (userMenu) userMenu.hidden = !loggedIn;
     if (userEmail) userEmail.textContent = loggedIn ? (session.user.email || 'Account') : '';
   }
 
+  function handleAuthRouting(session) {
+    if (session?.user) {
+      if (isHomePage) goDashboard();
+    } else if (isAppPage) {
+      goHome();
+    }
+  }
+
   window.openModal = function () {
+    if (!isHomePage) return;
     $('loginModal').classList.add('open');
     document.body.style.overflow = 'hidden';
     setMessage('');
@@ -107,6 +144,7 @@
   };
 
   window.closeModal = function () {
+    if (!isHomePage) return;
     $('loginModal').classList.remove('open');
     document.body.style.overflow = '';
     mode = 'signin';
@@ -128,7 +166,7 @@
     setMessage('');
     const { error } = await sb.auth.signInWithOAuth({
       provider: 'google',
-      options: { redirectTo: getRedirectUrl() },
+      options: { redirectTo: getOAuthRedirectUrl() },
     });
     setLoading(false);
     if (error) setMessage(error.message, 'error');
@@ -155,7 +193,7 @@
     try {
       if (mode === 'forgot') {
         const { error } = await sb.auth.resetPasswordForEmail(email, {
-          redirectTo: getRedirectUrl(),
+          redirectTo: getDashboardUrl(),
         });
         if (error) throw error;
         setMessage('Check your email for the password reset link.', 'success');
@@ -167,8 +205,7 @@
         const { data, error } = await sb.auth.signUp({ email, password });
         if (error) throw error;
         if (data.session) {
-          setMessage('Account created. You are signed in.', 'success');
-          closeModal();
+          goDashboard();
         } else {
           setMessage('Check your email to confirm your account, then sign in.', 'success');
         }
@@ -179,7 +216,7 @@
         }
         const { error } = await sb.auth.signInWithPassword({ email, password });
         if (error) throw error;
-        closeModal();
+        goDashboard();
       }
     } catch (err) {
       setMessage(err.message || 'Something went wrong.', 'error');
@@ -192,7 +229,7 @@
     const sb = getClient();
     if (!sb) return;
     await sb.auth.signOut();
-    updateNav(null);
+    goHome();
   }
 
   function bindEvents() {
@@ -221,7 +258,9 @@
 
     window.addEventListener('scroll', () => {
       const nav = document.querySelector('nav');
-      nav.style.boxShadow = window.scrollY > 20 ? '0 4px 24px rgba(26,95,168,0.1)' : 'none';
+      if (nav) {
+        nav.style.boxShadow = window.scrollY > 20 ? '0 4px 24px rgba(26,95,168,0.1)' : 'none';
+      }
     });
   }
 
@@ -234,11 +273,18 @@
     if (!sb) return;
 
     const { data: { session } } = await sb.auth.getSession();
+    handleAuthRouting(session);
     updateNav(session);
 
     sb.auth.onAuthStateChange((event, session) => {
-      updateNav(session);
-      if (event === 'SIGNED_OUT') updateNav(null);
+      if (event === 'SIGNED_IN' && session) {
+        if (isHomePage) goDashboard();
+        else updateNav(session);
+      } else if (event === 'SIGNED_OUT') {
+        goHome();
+      } else {
+        updateNav(session);
+      }
     });
   }
 
