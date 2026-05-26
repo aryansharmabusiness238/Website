@@ -267,6 +267,8 @@
     // Admin or client list.
     if (admin) {
       await refreshAdminView(sb);
+      // Poll so new submissions appear without refresh.
+      setInterval(() => refreshAdminView(sb).catch(() => {}), 5000);
       return;
     }
 
