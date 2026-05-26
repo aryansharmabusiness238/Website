@@ -288,7 +288,7 @@
     });
   }
 
-  function init() {
+  async function init() {
     updateNav(null);
     updateDashboardView(null);
     updateModalUI();
