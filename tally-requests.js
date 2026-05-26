@@ -119,7 +119,7 @@
       setSlackUiStatus(
         'Relay not configured',
         'warning',
-        'Add window.SLACK_WEBHOOK_PROXY_URL after you create a secure Slack bridge on the server side.'
+        'Add a public relay URL to window.SLACK_WEBHOOK_PROXY_URL after you create a secure Slack bridge on the server side.'
       );
     }
   }
@@ -298,11 +298,12 @@
 
   async function refreshClientView(sb, session) {
     const req = await fetchActiveClientRequest(sb, session.user.id);
-    clientState.activeRequest = req;
     if (!req) {
+      clientState.activeRequest = null;
       clientState.activeRequestId = null;
       return setClientView('form', null);
     }
+    clientState.activeRequest = req;
     if (req.status === 'pending') {
       clientState.activeRequestId = null;
       return setClientView('pending', req);
@@ -326,14 +327,13 @@
     list.innerHTML = '';
     show(empty, pending.length === 0);
     pending.forEach((req) => list.appendChild(renderAdminRequestCard(req)));
-    const pendingById = new Map(pending.map((req) => [req.id, req]));
 
     list.querySelectorAll('[data-action]').forEach((btn) => {
       btn.addEventListener('click', async () => {
         const id = btn.dataset.id;
         const action = btn.dataset.action;
         const next = action === 'accept' ? 'accepted' : 'denied';
-        const request = pendingById.get(id) || null;
+        const request = pending.find((row) => row.id === id) || null;
         btn.disabled = true;
         const { error } = await sb.rpc('admin_set_request_status', {
           request_id: id,
@@ -464,15 +464,16 @@
         request_id: requestId,
         sender_user_id: session.user.id,
         message_body: message,
-      }).select().single();
+      }).select();
       if (error) throw error;
+      const row = data?.[0] || null;
       input.value = '';
       notifySlack('request_message.created', {
         request: summarizeRequest(getKnownRequest(requestId)),
         message: {
-          id: data?.id || null,
+          id: row?.id || null,
           body: message,
-          created_at: data?.created_at || new Date().toISOString(),
+          created_at: row?.created_at || new Date().toISOString(),
           sender_email: session.user.email || '',
           sender_role: isAdminEmail(session.user.email) ? 'admin' : 'client',
         },
@@ -571,12 +572,13 @@
           contact_phone: tally.contact_phone,
           status: 'pending',
           client_dismissed: false,
-        }).select().single();
+        }).select();
 
         if (error) throw error;
+        const createdRequest = data?.[0] || null;
 
         notifySlack('client_request.created', {
-          request: summarizeRequest(data || {
+          request: summarizeRequest(createdRequest || {
             business_name: tally.business_name,
             current_website: tally.current_website,
             what_they_want: tally.what_they_want,
