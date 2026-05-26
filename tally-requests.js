@@ -220,7 +220,9 @@
           return;
         }
         await refreshAdminView(sb);
-        await refreshAdminClients(sb, adminState.session);
+        if (adminState.activeTab === 'clients') {
+          await refreshAdminClients(sb, adminState.session);
+        }
       });
     });
   }
