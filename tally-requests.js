@@ -302,8 +302,12 @@
       btn.dataset.requestId = client.id;
       btn.innerHTML = `<strong>${safeText(client.business_name || 'Client')}</strong><span>${safeText(client.contact_email || '')}</span>`;
       btn.addEventListener('click', async () => {
+        if (adminState.selectedRequestId === client.id) return;
         adminState.selectedRequestId = client.id;
-        await refreshAdminClients(sb, session);
+        list.querySelectorAll('.client-item').forEach((item) => {
+          item.classList.toggle('is-active', item.dataset.requestId === client.id);
+        });
+        await renderAdminChat(sb, session);
       });
       list.appendChild(btn);
     });
