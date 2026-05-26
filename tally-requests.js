@@ -2,6 +2,16 @@
   const { createClient } = supabase;
 
   const $ = (id) => document.getElementById(id);
+  const adminState = {
+    activeTab: 'requests',
+    selectedRequestId: null,
+    clients: [],
+    session: null,
+  };
+  const clientState = {
+    activeRequestId: null,
+    session: null,
+  };
 
   function normalizeUrl(url) {
     return (url || '').replace(/\/rest\/v1\/?$/, '').replace(/\/$/, '');
@@ -106,6 +116,27 @@
     return data || [];
   }
 
+  async function fetchAcceptedClients(sb) {
+    const { data, error } = await sb
+      .from('client_requests')
+      .select('*')
+      .eq('status', 'accepted')
+      .order('updated_at', { ascending: false });
+    if (error) throw error;
+    return data || [];
+  }
+
+  async function fetchChatMessages(sb, requestId) {
+    if (!requestId) return [];
+    const { data, error } = await sb
+      .from('request_messages')
+      .select('*')
+      .eq('request_id', requestId)
+      .order('created_at', { ascending: true });
+    if (error) throw error;
+    return data || [];
+  }
+
   function renderAdminRequestCard(req) {
     const card = document.createElement('article');
     card.className = 'request-card';
@@ -136,11 +167,13 @@
     const pendingPanel = $('clientPendingPanel');
     const acceptedPanel = $('clientAcceptedPanel');
     const deniedPanel = $('clientDeniedPanel');
+    const chatPanel = $('clientChatPanel');
 
     show(formPanel, mode === 'form');
     show(pendingPanel, mode === 'pending');
     show(acceptedPanel, mode === 'accepted');
     show(deniedPanel, mode === 'denied');
+    show(chatPanel, mode === 'chat');
 
     const pendingBusinessName = $('pendingBusinessName');
     if (pendingBusinessName) {
@@ -152,7 +185,11 @@
     const req = await fetchActiveClientRequest(sb, session.user.id);
     if (!req) return setClientView('form', null);
     if (req.status === 'pending') return setClientView('pending', req);
-    if (req.status === 'accepted') return setClientView('accepted', req);
+    if (req.status === 'accepted') {
+      clientState.activeRequestId = req.id;
+      setClientView('chat', req);
+      return renderClientChat(sb, session);
+    }
     if (req.status === 'denied') return setClientView('denied', req);
     return setClientView('form', null);
   }
@@ -183,8 +220,118 @@
           return;
         }
         await refreshAdminView(sb);
+        await refreshAdminClients(sb, adminState.session);
       });
     });
+  }
+
+  function renderChatMessages(container, rows, currentUserId) {
+    if (!container) return;
+    container.innerHTML = '';
+    if (!rows.length) {
+      const empty = document.createElement('p');
+      empty.className = 'chat-empty';
+      empty.textContent = 'No messages yet.';
+      container.appendChild(empty);
+      return;
+    }
+
+    rows.forEach((row) => {
+      const bubble = document.createElement('div');
+      const mine = row.sender_user_id === currentUserId;
+      bubble.className = `chat-message ${mine ? 'chat-message--me' : 'chat-message--other'}`;
+
+      const text = document.createElement('div');
+      text.textContent = safeText(row.message_body || '');
+      bubble.appendChild(text);
+
+      const meta = document.createElement('div');
+      meta.className = 'chat-meta';
+      meta.textContent = row.created_at ? new Date(row.created_at).toLocaleString() : '';
+      bubble.appendChild(meta);
+
+      container.appendChild(bubble);
+    });
+
+    container.scrollTop = container.scrollHeight;
+  }
+
+  async function renderAdminChat(sb, session) {
+    const title = $('adminChatTitle');
+    const box = $('adminChatMessages');
+    if (!box) return;
+
+    const selected = adminState.clients.find((x) => x.id === adminState.selectedRequestId) || null;
+    if (!selected) {
+      if (title) title.textContent = 'Client chat';
+      box.innerHTML = '<p class="chat-empty">Select a client to open chat.</p>';
+      return;
+    }
+
+    if (title) title.textContent = safeText(selected.business_name || selected.contact_name || 'Client');
+    try {
+      const rows = await fetchChatMessages(sb, selected.id);
+      renderChatMessages(box, rows, session.user.id);
+    } catch (err) {
+      box.innerHTML = `<p class="chat-empty">${safeText(err.message)}</p>`;
+    }
+  }
+
+  async function refreshAdminClients(sb, session) {
+    const list = $('adminClientsList');
+    if (!list) return;
+    const clients = await fetchAcceptedClients(sb);
+    adminState.clients = clients;
+    list.innerHTML = '';
+
+    if (!clients.length) {
+      list.innerHTML = '<p class="chat-empty">No accepted clients yet.</p>';
+      adminState.selectedRequestId = null;
+      await renderAdminChat(sb, session);
+      return;
+    }
+
+    if (!adminState.selectedRequestId || !clients.some((x) => x.id === adminState.selectedRequestId)) {
+      adminState.selectedRequestId = clients[0].id;
+    }
+
+    clients.forEach((client) => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = `client-item ${adminState.selectedRequestId === client.id ? 'is-active' : ''}`;
+      btn.dataset.requestId = client.id;
+      btn.innerHTML = `<strong>${safeText(client.business_name || 'Client')}</strong><span>${safeText(client.contact_email || '')}</span>`;
+      btn.addEventListener('click', async () => {
+        adminState.selectedRequestId = client.id;
+        await refreshAdminClients(sb, session);
+      });
+      list.appendChild(btn);
+    });
+
+    await renderAdminChat(sb, session);
+  }
+
+  async function sendChatMessage(sb, requestId, session, inputId) {
+    const input = $(inputId);
+    if (!input || !requestId) return;
+    const message = input.value.trim();
+    if (!message) return;
+
+    input.disabled = true;
+    try {
+      const { error } = await sb.from('request_messages').insert({
+        request_id: requestId,
+        sender_user_id: session.user.id,
+        message_body: message,
+      });
+      if (error) throw error;
+      input.value = '';
+    } catch (err) {
+      alert(err.message || 'Failed to send message.');
+    } finally {
+      input.disabled = false;
+      input.focus();
+    }
   }
 
   async function dismissMyRequest(sb, requestId, session) {
@@ -194,6 +341,34 @@
       return;
     }
     await refreshClientView(sb, session);
+  }
+
+  async function renderClientChat(sb, session) {
+    const box = $('clientChatMessages');
+    if (!box) return;
+    if (!clientState.activeRequestId) {
+      box.innerHTML = '<p class="chat-empty">No active chat.</p>';
+      return;
+    }
+
+    try {
+      const rows = await fetchChatMessages(sb, clientState.activeRequestId);
+      renderChatMessages(box, rows, session.user.id);
+    } catch (err) {
+      box.innerHTML = `<p class="chat-empty">${safeText(err.message)}</p>`;
+    }
+  }
+
+  function setAdminTab(tab) {
+    adminState.activeTab = tab;
+    const requestsView = $('adminRequestsView');
+    const clientsView = $('adminClientsView');
+    show(requestsView, tab === 'requests');
+    show(clientsView, tab === 'clients');
+
+    document.querySelectorAll('[data-admin-tab]').forEach((btn) => {
+      btn.classList.toggle('is-active', btn.dataset.adminTab === tab);
+    });
   }
 
   function registerTallySubmissionListener(sb, session) {
@@ -256,6 +431,30 @@
     });
   }
 
+  function bindAdminChatEvents(sb, session) {
+    $('tabRequests')?.addEventListener('click', () => setAdminTab('requests'));
+    $('tabClients')?.addEventListener('click', async () => {
+      setAdminTab('clients');
+      await refreshAdminClients(sb, session);
+    });
+
+    $('adminChatForm')?.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      if (!adminState.selectedRequestId) return;
+      await sendChatMessage(sb, adminState.selectedRequestId, session, 'adminChatInput');
+      await renderAdminChat(sb, session);
+    });
+  }
+
+  function bindClientChatEvents(sb, session) {
+    $('clientChatForm')?.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      if (!clientState.activeRequestId) return;
+      await sendChatMessage(sb, clientState.activeRequestId, session, 'clientChatInput');
+      await renderClientChat(sb, session);
+    });
+  }
+
   async function init() {
     if (!isConfigured()) return;
     const sb = createClient(normalizeUrl(window.SUPABASE_URL), window.SUPABASE_ANON_KEY);
@@ -263,12 +462,25 @@
     if (!session?.user) return;
 
     const admin = isAdminEmail(session.user.email);
+    adminState.session = session;
+    clientState.session = session;
 
     // Admin or client list.
     if (admin) {
+      setAdminTab('requests');
+      bindAdminChatEvents(sb, session);
       await refreshAdminView(sb);
+      await refreshAdminClients(sb, session);
       // Poll so new submissions appear without refresh.
-      setInterval(() => refreshAdminView(sb).catch(() => {}), 5000);
+      setInterval(async () => {
+        try {
+          if (adminState.activeTab === 'requests') {
+            await refreshAdminView(sb);
+          } else {
+            await refreshAdminClients(sb, session);
+          }
+        } catch (_) {}
+      }, 5000);
       return;
     }
 
@@ -288,6 +500,8 @@
       });
     }
 
+    bindClientChatEvents(sb, session);
+
     // Listen for submit and persist to Supabase.
     registerTallySubmissionListener(sb, session);
 
@@ -295,7 +509,11 @@
     await refreshClientView(sb, session);
 
     // Poll occasionally so accept/deny updates show up without refresh.
-    setInterval(() => refreshClientView(sb, session).catch(() => {}), 5000);
+    setInterval(async () => {
+      try {
+        await refreshClientView(sb, session);
+      } catch (_) {}
+    }, 5000);
   }
 
   if (document.readyState === 'loading') {
@@ -304,4 +522,3 @@
     init();
   }
 })();
-
