@@ -27,10 +27,25 @@
   }
 
   const ADMIN_EMAILS = (window.ADMIN_EMAILS || []).map((e) => String(e).trim().toLowerCase());
+  const SLACK_PLACEHOLDERS = ['YOUR_', 'your-', 'your_', 'example.com'];
 
   function isAdminEmail(email) {
     if (!email) return false;
     return ADMIN_EMAILS.includes(String(email).trim().toLowerCase());
+  }
+
+  function getConfiguredValue(value) {
+    const text = String(value || '').trim();
+    if (!text) return '';
+    return SLACK_PLACEHOLDERS.some((token) => text.includes(token)) ? '' : text;
+  }
+
+  function getSlackConfig() {
+    return {
+      relayUrl: getConfiguredValue(window.SLACK_WEBHOOK_PROXY_URL),
+      workspaceUrl: getConfiguredValue(window.SLACK_WORKSPACE_URL),
+      defaultChannel: String(window.SLACK_DEFAULT_CHANNEL || '').trim(),
+    };
   }
 
   function show(el, visible) {
@@ -43,6 +58,106 @@
     if (Array.isArray(v)) return v.map((x) => String(x)).join(', ');
     if (typeof v === 'object') return JSON.stringify(v);
     return String(v);
+  }
+
+  function summarizeRequest(request) {
+    if (!request) return null;
+    return {
+      id: request.id || null,
+      business_name: safeText(request.business_name || 'NA'),
+      status: safeText(request.status || 'pending'),
+      contact_name: safeText(request.contact_name || 'NA'),
+      contact_email: safeText(request.contact_email || 'NA'),
+      contact_phone: safeText(request.contact_phone || 'NA'),
+      current_website: safeText(request.current_website || 'NA'),
+      what_they_want: safeText(request.what_they_want || 'NA'),
+      created_at: request.created_at || null,
+      updated_at: request.updated_at || null,
+    };
+  }
+
+  function getKnownRequest(requestId) {
+    if (!requestId) return null;
+    if (clientState.activeRequest?.id === requestId) return clientState.activeRequest;
+    return adminState.clients.find((request) => request.id === requestId) || null;
+  }
+
+  function setSlackUiStatus(text, tone, helpText) {
+    const pill = $('slackStatusPill');
+    const help = $('slackStatusHelp');
+    if (pill) {
+      pill.textContent = text;
+      pill.className = `slack-status-pill slack-status-pill--${tone}`;
+    }
+    if (help) help.textContent = helpText;
+  }
+
+  function updateSlackUi() {
+    const { relayUrl, workspaceUrl, defaultChannel } = getSlackConfig();
+    const channelLabel = $('slackChannelLabel');
+    const openSlackBtn = $('btnOpenSlack');
+    const testBtn = $('btnSlackTest');
+
+    if (channelLabel) {
+      channelLabel.textContent = defaultChannel ? `Channel: ${defaultChannel}` : 'Channel: not set';
+    }
+
+    if (openSlackBtn) {
+      openSlackBtn.hidden = !workspaceUrl;
+      if (workspaceUrl) openSlackBtn.href = workspaceUrl;
+    }
+
+    if (testBtn) testBtn.disabled = !relayUrl;
+
+    if (relayUrl) {
+      setSlackUiStatus(
+        'Relay configured',
+        'ok',
+        'Slack updates will be sent through your secure relay endpoint.'
+      );
+    } else {
+      setSlackUiStatus(
+        'Relay not configured',
+        'warning',
+        'Add window.SLACK_WEBHOOK_PROXY_URL after you create a secure Slack bridge on the server side.'
+      );
+    }
+  }
+
+  async function sendSlackEvent(eventName, payload) {
+    const { relayUrl } = getSlackConfig();
+    if (!relayUrl) return false;
+
+    const response = await fetch(relayUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        source: 'solven-dashboard',
+        event: eventName,
+        sent_at: new Date().toISOString(),
+        payload,
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Slack relay returned ${response.status}`);
+    }
+
+    return true;
+  }
+
+  function notifySlack(eventName, payload) {
+    const { relayUrl } = getSlackConfig();
+    if (!relayUrl) return;
+    sendSlackEvent(eventName, payload)
+      .then(() => {
+        updateSlackUi();
+      })
+      .catch((error) => {
+        setSlackUiStatus('Relay error', 'error', safeText(error.message || 'Could not reach Slack relay.'));
+      });
   }
 
   function getFieldValue(fields, keywords) {
@@ -183,13 +298,21 @@
 
   async function refreshClientView(sb, session) {
     const req = await fetchActiveClientRequest(sb, session.user.id);
-    if (!req) return setClientView('form', null);
-    if (req.status === 'pending') return setClientView('pending', req);
+    clientState.activeRequest = req;
+    if (!req) {
+      clientState.activeRequestId = null;
+      return setClientView('form', null);
+    }
+    if (req.status === 'pending') {
+      clientState.activeRequestId = null;
+      return setClientView('pending', req);
+    }
     if (req.status === 'accepted') {
       clientState.activeRequestId = req.id;
       setClientView('chat', req);
       return renderClientChat(sb, session);
     }
+    clientState.activeRequestId = null;
     if (req.status === 'denied') return setClientView('denied', req);
     return setClientView('form', null);
   }
@@ -203,12 +326,14 @@
     list.innerHTML = '';
     show(empty, pending.length === 0);
     pending.forEach((req) => list.appendChild(renderAdminRequestCard(req)));
+    const pendingById = new Map(pending.map((req) => [req.id, req]));
 
     list.querySelectorAll('[data-action]').forEach((btn) => {
       btn.addEventListener('click', async () => {
         const id = btn.dataset.id;
         const action = btn.dataset.action;
         const next = action === 'accept' ? 'accepted' : 'denied';
+        const request = pendingById.get(id) || null;
         btn.disabled = true;
         const { error } = await sb.rpc('admin_set_request_status', {
           request_id: id,
@@ -219,6 +344,16 @@
           btn.disabled = false;
           return;
         }
+        notifySlack('client_request.status_changed', {
+          previous_status: 'pending',
+          request: summarizeRequest({
+            ...(request || {}),
+            id,
+            status: next,
+            updated_at: new Date().toISOString(),
+          }),
+          triggered_by: adminState.session?.user?.email || 'admin',
+        });
         await refreshAdminView(sb);
         if (adminState.activeTab === 'clients') {
           await refreshAdminClients(sb, adminState.session);
@@ -325,13 +460,23 @@
 
     input.disabled = true;
     try {
-      const { error } = await sb.from('request_messages').insert({
+      const { data, error } = await sb.from('request_messages').insert({
         request_id: requestId,
         sender_user_id: session.user.id,
         message_body: message,
-      });
+      }).select().single();
       if (error) throw error;
       input.value = '';
+      notifySlack('request_message.created', {
+        request: summarizeRequest(getKnownRequest(requestId)),
+        message: {
+          id: data?.id || null,
+          body: message,
+          created_at: data?.created_at || new Date().toISOString(),
+          sender_email: session.user.email || '',
+          sender_role: isAdminEmail(session.user.email) ? 'admin' : 'client',
+        },
+      });
     } catch (err) {
       alert(err.message || 'Failed to send message.');
     } finally {
@@ -369,8 +514,10 @@
     adminState.activeTab = tab;
     const requestsView = $('adminRequestsView');
     const clientsView = $('adminClientsView');
+    const slackView = $('adminSlackView');
     show(requestsView, tab === 'requests');
     show(clientsView, tab === 'clients');
+    show(slackView, tab === 'slack');
 
     document.querySelectorAll('[data-admin-tab]').forEach((btn) => {
       btn.classList.toggle('is-active', btn.dataset.adminTab === tab);
@@ -414,7 +561,7 @@
 
         const tally = extractTallyData(payload);
 
-        const { error } = await sb.from('client_requests').insert({
+        const { data, error } = await sb.from('client_requests').insert({
           user_id: session.user.id,
           business_name: tally.business_name,
           current_website: tally.current_website,
@@ -424,10 +571,22 @@
           contact_phone: tally.contact_phone,
           status: 'pending',
           client_dismissed: false,
-        });
+        }).select().single();
 
         if (error) throw error;
 
+        notifySlack('client_request.created', {
+          request: summarizeRequest(data || {
+            business_name: tally.business_name,
+            current_website: tally.current_website,
+            what_they_want: tally.what_they_want,
+            contact_name: tally.contact_name,
+            contact_email: tally.contact_email,
+            contact_phone: tally.contact_phone,
+            status: 'pending',
+          }),
+          submitted_by: session.user.email || '',
+        });
         await refreshClientView(sb, session);
       } catch (err) {
         // eslint-disable-next-line no-console
@@ -446,12 +605,33 @@
       setAdminTab('clients');
       await refreshAdminClients(sb, session);
     });
+    $('tabSlack')?.addEventListener('click', () => {
+      setAdminTab('slack');
+      updateSlackUi();
+    });
 
     $('adminChatForm')?.addEventListener('submit', async (e) => {
       e.preventDefault();
       if (!adminState.selectedRequestId) return;
       await sendChatMessage(sb, adminState.selectedRequestId, session, 'adminChatInput');
       await renderAdminChat(sb, session);
+    });
+
+    $('btnSlackTest')?.addEventListener('click', async () => {
+      const button = $('btnSlackTest');
+      if (!button) return;
+      button.disabled = true;
+      try {
+        await sendSlackEvent('integration.test', {
+          message: 'Slack test from the Solven admin dashboard.',
+          triggered_by: session.user.email || 'admin',
+        });
+        setSlackUiStatus('Test sent', 'ok', 'Your relay accepted the Slack test event.');
+      } catch (error) {
+        setSlackUiStatus('Relay error', 'error', safeText(error.message || 'Could not reach Slack relay.'));
+      } finally {
+        button.disabled = !getSlackConfig().relayUrl;
+      }
     });
   }
 
@@ -477,6 +657,7 @@
     // Admin or client list.
     if (admin) {
       setAdminTab('requests');
+      updateSlackUi();
       bindAdminChatEvents(sb, session);
       await refreshAdminView(sb);
       await refreshAdminClients(sb, session);

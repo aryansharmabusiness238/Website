@@ -7,3 +7,9 @@ window.SUPABASE_ANON_KEY = 'YOUR_ANON_PUBLIC_KEY';
 window.HOME_URL = 'https://your-app.vercel.app/';
 window.DASHBOARD_URL = 'https://your-app.vercel.app/dashboard.html';
 window.ADMIN_EMAILS = ['admin@example.com'];
+
+// Slack integration (public, non-secret values only)
+// Your backend or Supabase Edge Function should keep the real Slack secrets private.
+window.SLACK_WEBHOOK_PROXY_URL = 'https://your-secure-backend.example.com/api/slack';
+window.SLACK_WORKSPACE_URL = 'https://app.slack.com/client/T00000000/C00000000';
+window.SLACK_DEFAULT_CHANNEL = '#sales';
