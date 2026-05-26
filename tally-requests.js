@@ -82,6 +82,11 @@
     return adminState.clients.find((request) => request.id === requestId) || null;
   }
 
+  function clearActiveRequest() {
+    clientState.activeRequest = null;
+    clientState.activeRequestId = null;
+  }
+
   function setSlackUiStatus(text, tone, helpText) {
     const pill = $('slackStatusPill');
     const help = $('slackStatusHelp');
@@ -142,7 +147,7 @@
     });
 
     if (!response.ok) {
-      throw new Error(`Slack relay returned ${response.status}`);
+      throw new Error(`Slack relay returned ${response.status} ${response.statusText || ''}`.trim());
     }
 
     return true;
@@ -299,8 +304,7 @@
   async function refreshClientView(sb, session) {
     const req = await fetchActiveClientRequest(sb, session.user.id);
     if (!req) {
-      clientState.activeRequest = null;
-      clientState.activeRequestId = null;
+      clearActiveRequest();
       return setClientView('form', null);
     }
     clientState.activeRequest = req;
@@ -313,7 +317,7 @@
       setClientView('chat', req);
       return renderClientChat(sb, session);
     }
-    clientState.activeRequestId = null;
+    clearActiveRequest();
     if (req.status === 'denied') return setClientView('denied', req);
     return setClientView('form', null);
   }
@@ -460,20 +464,20 @@
 
     input.disabled = true;
     try {
-      const { data, error } = await sb.from('request_messages').insert({
+      const createdAt = new Date().toISOString();
+      const { error } = await sb.from('request_messages').insert({
         request_id: requestId,
         sender_user_id: session.user.id,
         message_body: message,
-      }).select();
+      });
       if (error) throw error;
-      const row = data?.[0] || null;
       input.value = '';
       notifySlack('request_message.created', {
         request: summarizeRequest(getKnownRequest(requestId)),
         message: {
-          id: row?.id || null,
+          id: null,
           body: message,
-          created_at: row?.created_at || new Date().toISOString(),
+          created_at: createdAt,
           sender_email: session.user.email || '',
           sender_role: isAdminEmail(session.user.email) ? 'admin' : 'client',
         },
@@ -562,7 +566,7 @@
 
         const tally = extractTallyData(payload);
 
-        const { data, error } = await sb.from('client_requests').insert({
+        const { error } = await sb.from('client_requests').insert({
           user_id: session.user.id,
           business_name: tally.business_name,
           current_website: tally.current_website,
@@ -572,13 +576,12 @@
           contact_phone: tally.contact_phone,
           status: 'pending',
           client_dismissed: false,
-        }).select();
+        });
 
         if (error) throw error;
-        const createdRequest = data?.[0] || null;
 
         notifySlack('client_request.created', {
-          request: summarizeRequest(createdRequest || {
+          request: summarizeRequest({
             business_name: tally.business_name,
             current_website: tally.current_website,
             what_they_want: tally.what_they_want,
@@ -586,6 +589,7 @@
             contact_email: tally.contact_email,
             contact_phone: tally.contact_phone,
             status: 'pending',
+            created_at: new Date().toISOString(),
           }),
           submitted_by: session.user.email || '',
         });

@@ -16,6 +16,7 @@
     --slate: #4a6080;
     --mist: #f0f6fe;
     --glass-border: rgba(91,168,240,0.25);
+    --dashboard-shell-offset: 7.5rem;
   }
 
   body {
@@ -118,7 +119,7 @@
   #adminPanel {
     width: 100%;
     max-width: none;
-    min-height: calc(100vh - 7.5rem);
+    min-height: calc(100vh - var(--dashboard-shell-offset));
   }
 
   .panel-card {
@@ -679,7 +680,7 @@
             <article class="slack-card">
               <h2>What you need for a real Slack setup</h2>
               <ul class="slack-list">
-                <li>A Slack bot token <span class="slack-code">xoxb-...</span> stored only on your backend or Supabase Edge Function.</li>
+                <li>A Slack bot token <span class="slack-code">xoxb-...</span> stored only in backend secrets or Supabase Edge Function environment variables.</li>
                 <li>Your Slack channel ID <span class="slack-code">C...</span> for the channel that should receive updates.</li>
                 <li>The Slack signing secret if you want slash commands or interactive replies.</li>
                 <li>A public relay endpoint URL that this website can call safely.</li>
