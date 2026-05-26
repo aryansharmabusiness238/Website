@@ -106,3 +106,45 @@ grant usage on schema public to anon, authenticated;
 grant all on public.client_requests to authenticated;
 grant execute on function public.dismiss_my_request(uuid) to authenticated;
 grant execute on function public.admin_set_request_status(uuid, text) to authenticated;
+
+create table if not exists public.request_messages (
+  id uuid primary key default gen_random_uuid(),
+  request_id uuid not null references public.client_requests(id) on delete cascade,
+  sender_user_id uuid not null references auth.users(id) on delete cascade,
+  message_body text not null,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists request_messages_request_id_idx on public.request_messages(request_id);
+create index if not exists request_messages_created_at_idx on public.request_messages(created_at);
+
+alter table public.request_messages enable row level security;
+
+drop policy if exists "Participants read request messages" on public.request_messages;
+create policy "Participants read request messages"
+  on public.request_messages for select
+  using (
+    exists (
+      select 1
+      from public.client_requests r
+      where r.id = request_messages.request_id
+        and r.status = 'accepted'
+        and (r.user_id = auth.uid() or public.is_admin())
+    )
+  );
+
+drop policy if exists "Participants send request messages" on public.request_messages;
+create policy "Participants send request messages"
+  on public.request_messages for insert
+  with check (
+    sender_user_id = auth.uid()
+    and exists (
+      select 1
+      from public.client_requests r
+      where r.id = request_messages.request_id
+        and r.status = 'accepted'
+        and (r.user_id = auth.uid() or public.is_admin())
+    )
+  );
+
+grant all on public.request_messages to authenticated;
