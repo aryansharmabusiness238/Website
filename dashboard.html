@@ -163,6 +163,106 @@
     display: block;
     min-height: 700px;
   }
+
+  .status-banner {
+    text-align: center;
+    padding: 2rem 1.5rem;
+  }
+  .status-pill {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 0.35rem 0.85rem;
+    border-radius: 50px;
+    margin-bottom: 1rem;
+  }
+  .status-pill--pending { background: #fef9c3; color: #854d0e; }
+  .status-pill--accepted { background: #dcfce7; color: #166534; }
+  .status-pill--denied { background: #fee2e2; color: #991b1b; }
+
+  .btn-dismiss {
+    margin-top: 1.25rem;
+    padding: 0.65rem 1.5rem;
+    background: transparent;
+    border: 1.5px solid var(--slate);
+    color: var(--slate);
+    border-radius: 50px;
+    font-family: inherit;
+    font-size: 0.875rem;
+    cursor: pointer;
+  }
+  .btn-dismiss:hover { border-color: var(--blue-mid); color: var(--blue-mid); }
+
+  #adminRequestsList {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+  }
+
+  .request-card {
+    background: #f8fbff;
+    border: 1px solid var(--glass-border);
+    border-radius: 16px;
+    padding: 1.25rem 1.5rem;
+  }
+
+  .request-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 1rem;
+  }
+
+  .request-card-header strong {
+    font-family: 'Syne', sans-serif;
+    font-size: 1.1rem;
+    color: var(--navy);
+  }
+
+  .request-details {
+    display: grid;
+    gap: 0.65rem;
+    font-size: 0.875rem;
+  }
+
+  .request-details dt {
+    font-weight: 600;
+    color: var(--slate);
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+
+  .request-details dd {
+    color: var(--navy);
+    margin: 0 0 0.25rem;
+    line-height: 1.5;
+  }
+
+  .request-actions {
+    display: flex;
+    gap: 0.75rem;
+    margin-top: 1.25rem;
+  }
+
+  .btn-accept, .btn-deny {
+    flex: 1;
+    padding: 0.65rem 1rem;
+    border: none;
+    border-radius: 10px;
+    font-family: inherit;
+    font-weight: 600;
+    font-size: 0.875rem;
+    cursor: pointer;
+  }
+
+  .btn-accept { background: #166534; color: white; }
+  .btn-deny { background: #fee2e2; color: #991b1b; }
+  .btn-accept:hover { background: #15803d; }
+  .btn-deny:hover { background: #fecaca; }
 </style>
 </head>
 <body data-page="app">
@@ -200,18 +300,42 @@
 
   <!-- Client dashboard -->
   <section class="dashboard-panel" id="clientPanel" hidden>
-    <div class="jotform-wrap">
-      <!-- Replace YOUR_JOTFORM_ID below with your actual JotForm form ID -->
-      <!-- e.g. if your form URL is https://form.jotform.com/251234567890, the ID is 251234567890 -->
-      <iframe
-        id="jotformFrame"
-        src="https://form.jotform.com/261455208053048"
-        title="Solven Project Request"
-        allowtransparency="true"
-        allow="geolocation; microphone; camera"
-        scrolling="yes">
-      </iframe>
-    </div>
+    <section id="clientFormPanel" class="panel-card" aria-live="polite">
+      <h2>Tell us about your business</h2>
+      <p class="panel-desc">Submit your project details, and we'll review your request.</p>
+      <div class="jotform-wrap">
+        <iframe
+          id="tallyFrame"
+          src="https://tally.so/r/9qo0kG"
+          title="Tell us about your business"
+          allowtransparency="true"
+          allow="geolocation; microphone; camera"
+          scrolling="yes">
+        </iframe>
+      </div>
+    </section>
+
+    <section id="clientPendingPanel" class="panel-card status-banner" hidden>
+      <span class="status-pill status-pill--pending">Pending</span>
+      <h2>We're reviewing your request</h2>
+      <p class="panel-desc">
+        Thanks, <strong id="pendingBusinessName"></strong>! Your request is pending.
+      </p>
+    </section>
+
+    <section id="clientAcceptedPanel" class="panel-card status-banner" hidden>
+      <span class="status-pill status-pill--accepted">Accepted</span>
+      <h2>You're approved!</h2>
+      <p class="panel-desc">Great news — your request has been accepted.</p>
+      <button type="button" class="btn-dismiss" id="btnDismissAccepted">Dismiss</button>
+    </section>
+
+    <section id="clientDeniedPanel" class="panel-card status-banner" hidden>
+      <span class="status-pill status-pill--denied">Denied</span>
+      <h2>Request declined</h2>
+      <p class="panel-desc">Unfortunately we can't take on this project right now.</p>
+      <button type="button" class="btn-dismiss" id="btnDismissDenied">Dismiss</button>
+    </section>
   </section>
 
 </main>
@@ -219,5 +343,6 @@
 <script src="supabase-config.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="auth.js"></script>
+<script src="tally-requests.js"></script>
 </body>
 </html>
