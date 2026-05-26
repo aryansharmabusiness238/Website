@@ -128,6 +128,7 @@ create policy "Participants read request messages"
       select 1
       from public.client_requests r
       where r.id = request_messages.request_id
+        and r.status = 'accepted'
         and (r.user_id = auth.uid() or public.is_admin())
     )
   );

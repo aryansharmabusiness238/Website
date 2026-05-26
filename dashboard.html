@@ -515,7 +515,7 @@
                 <p class="chat-empty">Select a client to open chat.</p>
               </div>
               <form class="chat-compose" id="adminChatForm">
-                <input type="text" id="adminChatInput" maxlength="1500" placeholder="Type a message..." autocomplete="off" aria-label="Compose message to selected client">
+                <input type="text" id="adminChatInput" maxlength="1500" placeholder="Type a message..." autocomplete="off" aria-label="Compose message to selected client" required>
                 <button type="submit" aria-label="Send message to selected client">Send</button>
               </form>
             </div>
@@ -562,7 +562,7 @@
           <p class="chat-empty">Your chat will appear here.</p>
         </div>
         <form class="chat-compose" id="clientChatForm">
-          <input type="text" id="clientChatInput" maxlength="1500" placeholder="Type a message..." autocomplete="off" aria-label="Compose message to admin">
+          <input type="text" id="clientChatInput" maxlength="1500" placeholder="Type a message..." autocomplete="off" aria-label="Compose message to admin" required>
           <button type="submit" aria-label="Send message to admin">Send</button>
         </form>
       </div>

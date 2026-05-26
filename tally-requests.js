@@ -438,7 +438,10 @@
   }
 
   function bindAdminChatEvents(sb, session) {
-    $('tabRequests')?.addEventListener('click', () => setAdminTab('requests'));
+    $('tabRequests')?.addEventListener('click', async () => {
+      setAdminTab('requests');
+      await refreshAdminView(sb);
+    });
     $('tabClients')?.addEventListener('click', async () => {
       setAdminTab('clients');
       await refreshAdminClients(sb, session);
